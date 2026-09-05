@@ -64,11 +64,24 @@ struct p2p_mem_unregister_param {
 
 #define P2P_TOPO_NAME_LEN 32
 #define P2P_TOPO_MAX_BDEVS 4
+#define P2P_TOPO_MAX_EXTENTS 8192
 
 struct topo_user_bdev {
 	__u32 dev_id;
 	__u32 reserved;
 	/* [start_sector, start_sector + size_sector) */
+	__u64 size_sector;
+	__u64 start_sector;
+};
+
+/*
+ * A loop topology maps consecutive sectors of the loop device onto extents
+ * in one of the registered NVMe components.  start_sector is relative to the
+ * corresponding topo_user_bdev start_sector.
+ */
+struct topo_user_extent {
+	__u32 dev_index;
+	__u32 reserved;
 	__u64 size_sector;
 	__u64 start_sector;
 };
@@ -86,6 +99,13 @@ struct topo_user_cfg {
 	__u64 extra[2];
 	struct topo_user_bdev bdevs[];
 };
+
+/* Loop extents immediately follow the nr_devs bdev entries. */
+static inline struct topo_user_extent *topo_user_loop_extents(
+	struct topo_user_cfg *cfg)
+{
+	return (struct topo_user_extent *)&cfg->bdevs[cfg->nr_devs];
+}
 
 #define IOCTL_ADD_TOPO _IOW('k', 1, struct topo_user_cfg)
 #define IOCTL_RW_FILE _IOWR('k', 2, struct p2p_io_param)

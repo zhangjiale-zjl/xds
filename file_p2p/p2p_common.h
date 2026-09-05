@@ -10,7 +10,7 @@
 /* Open /dev/p2p_device O_RDWR|O_CLOEXEC. Returns fd or -errno. */
 int p2p_open_dev(void);
 
-/* Discover nvme/linear/raid0 topology for block device path @dev and
+/* Discover nvme/linear/raid0/loop topology for block device path @dev and
  * IOCTL_ADD_TOPO on @dev_fd. Returns 0 or -errno. */
 int p2p_add_topo(int dev_fd, const char *dev);
 
