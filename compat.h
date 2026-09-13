@@ -8,7 +8,6 @@
 #include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/nvme.h>
-#include <linux/slab.h>
 #include <linux/version.h>
 
 #include "dev.h"
@@ -17,12 +16,14 @@
 
 #define P2P_LEGACY_KERNEL
 
-/*
- * The NVMe request PDU stores the passthrough command as its first member.
- * Only the legacy completion path needs that pointer to free its owned copy.
- */
+/* Mirrors the common prefix of struct nvme_request in Linux 5.15. */
 struct p2p_nvme_request {
 	struct nvme_command *cmd;
+	union nvme_result result;
+	u8 genctr;
+	u8 retries;
+	u8 flags;
+	u16 status;
 };
 typedef struct block_device p2p_bdev_handle;
 
@@ -31,25 +32,22 @@ typedef struct block_device p2p_bdev_handle;
 static inline struct request *p2p_alloc_nvme_request(struct request_queue *queue,
 						     struct nvme_command *cmd)
 {
-	struct nvme_command *owned_cmd;
 	struct p2p_nvme_request *nvme_req;
 	struct request *req;
 
-	owned_cmd = kmemdup(cmd, sizeof(*cmd), GFP_KERNEL);
-	if (!owned_cmd)
-		return ERR_PTR(-ENOMEM);
-
 	req = blk_mq_alloc_request(queue,
-				   nvme_is_write(owned_cmd) ? REQ_OP_DRV_OUT : REQ_OP_DRV_IN, 0);
-	if (IS_ERR(req)) {
-		kfree(owned_cmd);
+				   nvme_is_write(cmd) ? REQ_OP_DRV_OUT : REQ_OP_DRV_IN, 0);
+	if (IS_ERR(req))
 		return req;
-	}
 
 	req->cmd_flags |= REQ_FAILFAST_DRIVER;
 	req->rq_flags |= RQF_DONTPREP;
 	nvme_req = blk_mq_rq_to_pdu(req);
-	nvme_req->cmd = owned_cmd;
+	nvme_req->status = 0;
+	nvme_req->retries = 0;
+	nvme_req->flags = 0;
+	memcpy(nvme_req->cmd, cmd, sizeof(*cmd));
+	nvme_req->cmd->common.flags &= ~NVME_CMD_SGL_ALL;
 	return req;
 }
 
@@ -59,11 +57,7 @@ static inline enum rq_end_io_ret p2p_end_io(struct request *req, blk_status_t st
 static inline void p2p_end_io(struct request *req, blk_status_t status)
 #endif
 {
-	struct p2p_nvme_request *nvme_req = blk_mq_rq_to_pdu(req);
-	struct nvme_command *cmd = nvme_req->cmd;
-
 	p2p_complete_io(req, status);
-	kfree(cmd);
 #ifdef P2P_HAVE_RQ_END_IO_RET
 	return RQ_END_IO_FREE;
 #else
