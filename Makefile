@@ -1,4 +1,7 @@
 KSRC ?= /lib/modules/$(shell uname -r)/build
+ASCEND_HAL_INCLUDE ?= /usr/local/Ascend/driver/kernel/dev_inc/inc
+
+ccflags-y += -I$(ASCEND_HAL_INCLUDE)
 
 ifneq ($(KERNELRELEASE),)
 P2P_BLOCK_HEADERS := $(srctree)/include/linux/blk_types.h \

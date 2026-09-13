@@ -11,7 +11,7 @@
 # offset × mem-mode, solo then concurrent. After each case group the files are
 # regenerated with a new seed to avoid NVMe read-cache reuse.
 #
-# Kernel P2P_MIN_PAGE_SIZE is 64KiB, but Ascend needs a ≥2MiB P2P-huge HBM
+# The HAL requires 4 KiB alignment, but Ascend needs a ≥2MiB P2P-huge HBM
 # window (acl policy HUGE_FIRST_P2P=3). register_mem can still test short I/Os
 # (e.g. 4K) inside that window; noregister skips lengths < 2M.
 #

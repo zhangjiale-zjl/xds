@@ -5,7 +5,7 @@
  * back to host with aclrtMemcpy, and compares CRC32 of the HBM payload
  * against CRC32 of the same range read with O_DIRECT pread.
  *
- * Kernel P2P_MIN_PAGE_SIZE is 64KiB. Physical Ascend needs a P2P-huge HBM
+ * The HAL requires 4 KiB-aligned ranges. Physical Ascend needs a P2P-huge HBM
  * window (default ≥2MiB, acl policy HUGE_FIRST_P2P) so get_mem_page_size is
  * not 4K. I/O may use a shorter prefix (e.g. 4K) inside that window with
  * register_mem. --no-register-mem requires --length >= 2M (one-shot pins iov).

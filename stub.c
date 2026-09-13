@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <linux/init.h>
 #include <linux/kernel.h>
+#include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/overflow.h>
 #include <linux/sizes.h>
+#include <linux/slab.h>
+#include <linux/vmalloc.h>
 
 #include "mem_abi.h"
 
@@ -21,6 +24,10 @@ MODULE_PARM_DESC(max_pages, "CMB-backed VA window size in 4 KiB pages");
 
 static atomic_t get_pa_calls = ATOMIC_INIT(0);
 static atomic_t put_pa_calls = ATOMIC_INIT(0);
+
+struct stub_page_table {
+	struct p2p_page_table table;
+};
 
 static int stub_param_get_atomic(char *buffer, const struct kernel_param *kp)
 {
@@ -53,17 +60,18 @@ static int stub_validate_range(u64 addr, u64 size)
 	return 0;
 }
 
-int devmm_get_mem_pa_list(struct devmm_svm_process_id *process_id, u64 addr,
-			  u64 size, u64 *pa_list, u32 pa_num)
+int hal_kernel_p2p_get_pages(u64 addr, u64 size,
+			     void (*free_callback)(void *data), void *data,
+			     struct p2p_page_table **page_table)
 {
-	u64 expected_pa_num;
+	struct stub_page_table *stub_table;
+	u64 page_num;
 	u64 pa;
-	unsigned int i;
+	u64 i;
 	int err;
 
 	atomic_inc(&get_pa_calls);
-	(void)process_id;
-	if (!pa_list)
+	if (!free_callback || !page_table)
 		return -EINVAL;
 	err = stub_validate_range(addr, size);
 	if (err)
@@ -72,44 +80,50 @@ int devmm_get_mem_pa_list(struct devmm_svm_process_id *process_id, u64 addr,
 	    !IS_ALIGNED(size, STUB_PAGE_SIZE))
 		return -EINVAL;
 
-	expected_pa_num = size / STUB_PAGE_SIZE;
-	if (!expected_pa_num || expected_pa_num > U32_MAX ||
-	    pa_num != expected_pa_num)
+	page_num = size / STUB_PAGE_SIZE;
+	if (!page_num)
 		return -EINVAL;
 	if (check_add_overflow((u64)base_pa, addr, &pa))
 		return -EOVERFLOW;
 
-	for (i = 0; i < pa_num; i++) {
-		pa_list[i] = pa;
+	stub_table = kzalloc(sizeof(*stub_table), GFP_KERNEL);
+	if (!stub_table)
+		return -ENOMEM;
+	stub_table->table.pages_info = kvmalloc_array(
+		page_num, sizeof(*stub_table->table.pages_info), GFP_KERNEL);
+	if (!stub_table->table.pages_info) {
+		kfree(stub_table);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < page_num; i++) {
+		stub_table->table.pages_info[i].pa = pa;
 		pa += STUB_PAGE_SIZE;
 	}
+	stub_table->table.version = P2P_GET_PAGE_VERSION;
+	stub_table->table.page_size = STUB_PAGE_SIZE;
+	stub_table->table.page_num = page_num;
+	*page_table = &stub_table->table;
+	(void)data;
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(devmm_get_mem_pa_list);
+EXPORT_SYMBOL_GPL(hal_kernel_p2p_get_pages);
 
-void devmm_put_mem_pa_list(struct devmm_svm_process_id *process_id, u64 addr,
-			   u64 size, u64 *pa_list, u32 pa_num)
+int hal_kernel_p2p_put_pages(struct p2p_page_table *page_table)
 {
+	struct stub_page_table *stub_table;
+
 	atomic_inc(&put_pa_calls);
-	(void)process_id;
-	(void)addr;
-	(void)size;
-	(void)pa_list;
-	(void)pa_num;
-}
-EXPORT_SYMBOL_GPL(devmm_put_mem_pa_list);
+	if (!page_table)
+		return -EINVAL;
 
-int devmm_get_mem_page_size(struct devmm_svm_process_id *process_id, u64 addr,
-			    u64 size)
-{
-	(void)process_id;
-	if (stub_validate_range(addr, size))
-		return -ERANGE;
-
-	return STUB_PAGE_SIZE;
+	stub_table = container_of(page_table, struct stub_page_table, table);
+	kvfree(page_table->pages_info);
+	kfree(stub_table);
+	return 0;
 }
-EXPORT_SYMBOL_GPL(devmm_get_mem_page_size);
+EXPORT_SYMBOL_GPL(hal_kernel_p2p_put_pages);
 
 static int __init stub_init(void)
 {

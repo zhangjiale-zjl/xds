@@ -1,14 +1,17 @@
 #ifndef P2P_MEM_H_
 #define P2P_MEM_H_
 
-#include "mem_abi.h"
+#include <linux/types.h>
 
-int p2p_mem_get_pa_list(struct devmm_svm_process_id *process_id, u64 addr,
-			u64 size, u64 *pa_list, u32 pa_num);
-void p2p_mem_put_pa_list(struct devmm_svm_process_id *process_id, u64 addr,
-			 u64 size, u64 *pa_list, u32 pa_num);
-int p2p_mem_get_page_size(struct devmm_svm_process_id *process_id, u64 addr,
-			  u64 size);
+struct p2p_mem_pages;
+
+int p2p_mem_get_pages(u64 addr, u64 size,
+		      void (*invalidate)(void *data), void *data,
+		      struct p2p_mem_pages **pages_out);
+void p2p_mem_put_pages(struct p2p_mem_pages *pages);
+u64 p2p_mem_page_size(const struct p2p_mem_pages *pages);
+u64 p2p_mem_page_count(const struct p2p_mem_pages *pages);
+u64 p2p_mem_page_pa(const struct p2p_mem_pages *pages, u64 index);
 
 int p2p_mem_init(void);
 void p2p_mem_exit(void);
