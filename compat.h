@@ -51,14 +51,22 @@ static inline struct request *p2p_alloc_nvme_request(struct request_queue *queue
 	return req;
 }
 
+#ifdef P2P_HAVE_RQ_END_IO_RET
+static inline enum rq_end_io_ret p2p_end_io(struct request *req, blk_status_t status)
+#else
 static inline void p2p_end_io(struct request *req, blk_status_t status)
+#endif
 {
 	struct p2p_nvme_request *nvme_req = blk_mq_rq_to_pdu(req);
 	struct nvme_command *cmd = nvme_req->cmd;
 
 	p2p_complete_io(req, status);
 	kfree(cmd);
+#ifdef P2P_HAVE_RQ_END_IO_RET
+	return RQ_END_IO_FREE;
+#else
 	blk_mq_free_request(req);
+#endif
 }
 
 static inline p2p_bdev_handle *p2p_bdev_open_by_dev(dev_t dev)
@@ -78,7 +86,11 @@ static inline struct block_device *p2p_handle_to_bdev(p2p_bdev_handle *handle)
 
 static inline struct block_device *p2p_bdev_whole(struct block_device *bdev)
 {
+#ifdef bdev_whole
+	return bdev_whole(bdev);
+#else
 	return bdev->bd_contains;
+#endif
 }
 
 static inline sector_t p2p_bdev_nr_sectors(struct block_device *bdev)
@@ -88,7 +100,11 @@ static inline sector_t p2p_bdev_nr_sectors(struct block_device *bdev)
 
 static inline void p2p_execute_rq_nowait(struct request *req, struct gendisk *disk)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
+	blk_execute_rq_nowait(disk, req, true, req->end_io);
+#else
 	blk_execute_rq_nowait(req->q, disk, req, true, req->end_io);
+#endif
 }
 
 static inline struct class *p2p_class_create(const char *name)

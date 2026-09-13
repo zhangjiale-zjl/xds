@@ -1,5 +1,15 @@
 KSRC ?= /lib/modules/$(shell uname -r)/build
 
+ifneq ($(KERNELRELEASE),)
+P2P_BLOCK_HEADERS := $(srctree)/include/linux/blk_types.h \
+	$(srctree)/include/linux/blk-mq.h \
+	$(srctree)/include/linux/blkdev.h
+
+ifneq ($(shell grep -s -l "enum rq_end_io_ret" $(P2P_BLOCK_HEADERS) 2>/dev/null),)
+ccflags-y += -DP2P_HAVE_RQ_END_IO_RET
+endif
+endif
+
 .PHONY: all mod lib clean test
 
 all: mod lib
