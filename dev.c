@@ -295,7 +295,7 @@ static void p2p_registered_mem_release(struct percpu_ref *ref)
 
 	mem = container_of(ref, struct p2p_registered_mem, io_refs);
 	pr_debug("registered memory handle 0x%llx released\n", mem->handle);
-	complete(&mem->io_zero);
+	complete_all(&mem->io_zero);
 }
 
 static void p2p_revoke_registered_mem(struct p2p_registered_mem *mem)
