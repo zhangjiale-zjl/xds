@@ -17,8 +17,6 @@
 
 #define P2P_LEGACY_KERNEL
 
-#define P2P_NVME_QID_ANY (-1)
-
 /*
  * The NVMe request PDU stores the passthrough command as its first member.
  * Only the legacy completion path needs that pointer to free its owned copy.
@@ -26,11 +24,6 @@
 struct p2p_nvme_request {
 	struct nvme_command *cmd;
 };
-
-struct request *nvme_alloc_request(struct request_queue *q,
-				   struct nvme_command *cmd,
-				   blk_mq_req_flags_t flags, int qid);
-
 typedef struct block_device p2p_bdev_handle;
 
 #define P2P_BDEV_READ_MODE FMODE_READ
@@ -39,15 +32,24 @@ static inline struct request *p2p_alloc_nvme_request(struct request_queue *queue
 						     struct nvme_command *cmd)
 {
 	struct nvme_command *owned_cmd;
+	struct p2p_nvme_request *nvme_req;
 	struct request *req;
 
 	owned_cmd = kmemdup(cmd, sizeof(*cmd), GFP_KERNEL);
 	if (!owned_cmd)
 		return ERR_PTR(-ENOMEM);
 
-	req = nvme_alloc_request(queue, owned_cmd, 0, P2P_NVME_QID_ANY);
-	if (IS_ERR(req))
+	req = blk_mq_alloc_request(queue,
+				   nvme_is_write(owned_cmd) ? REQ_OP_DRV_OUT : REQ_OP_DRV_IN, 0);
+	if (IS_ERR(req)) {
 		kfree(owned_cmd);
+		return req;
+	}
+
+	req->cmd_flags |= REQ_FAILFAST_DRIVER;
+	req->rq_flags |= RQF_DONTPREP;
+	nvme_req = blk_mq_rq_to_pdu(req);
+	nvme_req->cmd = owned_cmd;
 	return req;
 }
 
