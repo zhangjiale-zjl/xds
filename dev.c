@@ -1337,6 +1337,8 @@ static void p2p_io_ctx_put(struct p2p_io_context *io_ctx)
 	 */
 	if (io_ctx->pinned_mem.reg_mem)
 		p2p_unpin_io_mem(&io_ctx->pinned_mem);
+	else if (io_ctx->pinned_mem.pinned)
+		complete_all(&io_ctx->pinned_mem.pinned_pa->io_done);
 
 	/* Log once per io_ctx when NVMe completion carried a blk error. */
 	if (io_ctx->io_err && !io_ctx->issue_err)

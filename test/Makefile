@@ -2,13 +2,16 @@ CC ?= cc
 CFLAGS ?= -O2 -Wall -Wextra -Werror
 CPPFLAGS += -I../file_p2p -I..
 
-.PHONY: all clean
+.PHONY: all clean check-mem-lifecycle
 
 TEST_BINS := crc32_verify c_api_test mem_registration_test direct_io_test \
 	rw_api_test uapi_rw_test nds_api_test nds_example nds_bw_bench \
 	nds_crc_verify
 
 all: $(TEST_BINS)
+
+check-mem-lifecycle:
+	python3 run_mem_lifecycle_test.py --cc "$(CC)"
 
 crc32_verify: crc32_verify.c
 	$(CC) $(CFLAGS) -o $@ $<

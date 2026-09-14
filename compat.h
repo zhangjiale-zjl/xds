@@ -16,6 +16,11 @@
 
 #define P2P_LEGACY_KERNEL
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0) || \
+	LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+#error "XDS legacy NVMe request ABI requires Linux 5.15.x; this kernel needs a matching adapter"
+#endif
+
 /* Mirrors the common prefix of struct nvme_request in Linux 5.15. */
 struct p2p_nvme_request {
 	struct nvme_command *cmd;
@@ -43,6 +48,10 @@ static inline struct request *p2p_alloc_nvme_request(struct request_queue *queue
 	req->cmd_flags |= REQ_FAILFAST_DRIVER;
 	req->rq_flags |= RQF_DONTPREP;
 	nvme_req = blk_mq_rq_to_pdu(req);
+	if (WARN_ON_ONCE(!nvme_req->cmd)) {
+		blk_mq_free_request(req);
+		return ERR_PTR(-EOPNOTSUPP);
+	}
 	nvme_req->status = 0;
 	nvme_req->retries = 0;
 	nvme_req->flags = 0;
